@@ -75,13 +75,13 @@ file. Copy the ```.env.example``` to ```.env``` and make all the changes you lik
 Make sure you pay attention to the table below regarding enabling and disabling features. Some features depend on others
 to work. Others have stipulations.
 
-| Feature             | Environment Setting          | Command Option  | Requires Features   | Stipulations |
-|---------------------|------------------------------|-----------------|---------------------|--------------|
-| Request Validation  | ```WITH_JWT_VALIDATION```    | N/A             | N/A                 | Commands without JWT will fail as 401 |
-| Replay Prevention   | ```WITH_REPLAY_PREVENTION``` | N/A             | Request Validation  | JWT must be present as it is used as the unique identifier for replay | 
-| User Authentication | ```WITH_AUTHENTICATION```    | N/A             | Request Validation  | JWT includes the username as the iss claim. Validating the JWT via the key is used for authentication |
-| Rate Limit          | ```WITH_RATE_LIMITING```     | N/A             | User Authentication | GET is not rate limited. Post is rate limited |
-| Encryption          | ```WITH_JWE_ENCRYPTION ```   | --no-encryption | User Authentication | User authentication is required to properly determine keys for decryption. Both client and API will abide by the environment setting but client can be overridden by command option |
+| Feature             | Environment Setting          | Command Option        | Requires Features   | Stipulations |
+|---------------------|------------------------------|-----------------------|---------------------|--------------|
+| Request Validation  | ```WITH_JWT_VALIDATION```    | N/A                   | N/A                 | Commands without JWT will fail as 401 |
+| Replay Prevention   | ```WITH_REPLAY_PREVENTION``` | N/A                   | Request Validation  | JWT must be present as it is used as the unique identifier for replay | 
+| User Authentication | ```WITH_AUTHENTICATION```    | N/A                   | Request Validation  | JWT includes the username as the iss claim. Validating the JWT via the key is used for authentication |
+| Rate Limit          | ```WITH_RATE_LIMITING```     | N/A                   | User Authentication | GET is not rate limited. Post is rate limited |
+| Encryption          | ```WITH_JWE_ENCRYPTION ```   | ```--no-encryption``` | User Authentication | User authentication is required to properly determine keys for decryption. Both client and API will abide by the environment setting but client can be overridden by command option |
 
 ## Contributing
 

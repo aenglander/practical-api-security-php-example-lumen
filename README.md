@@ -19,6 +19,7 @@ The combined requirements are PHP 7.1.3+ with the following extensions:
 * PDO
 * GMP
 * MBString
+* Memcached
 
 ### Composer
 

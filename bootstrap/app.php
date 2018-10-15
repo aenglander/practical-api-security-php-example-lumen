@@ -82,12 +82,6 @@ if (env('WITH_RATE_LIMITING', '1') === '1') {
         App\Http\Middleware\RateLimitMiddleware::class
     ]);
 }
-
-if (env('WITH_JWE_ENCRYPTION', '1') === '1') {
-    $app->middleware([
-        App\Http\Middleware\JWEMiddleware::class
-    ]);
-}
 /*
 |--------------------------------------------------------------------------
 | Register Service Providers

@@ -300,7 +300,7 @@ class APIClient extends Command
         if ($this->option('no-encryption')) {
             return false;
         } else {
-            return env('WITH_JWE_ENCRYPTION', '1') === '1';
+            return env('WITH_JWE_ENCRYPTION', '0') === '1';
         }
     }
 

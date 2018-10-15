@@ -71,12 +71,6 @@ if (env('WITH_AUTHENTICATION', '1') === '1') {
     ]);
 }
 
-if (env('WITH_REQUEST_VALIDATION', '1') === '1') {
-    $app->middleware([
-        App\Http\Middleware\RequestValidationMiddleware::class
-    ]);
-}
-
 if (env('WITH_RATE_LIMITING', '1') === '1') {
     $app->middleware([
         App\Http\Middleware\RateLimitMiddleware::class

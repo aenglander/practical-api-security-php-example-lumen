@@ -218,7 +218,7 @@ class APIClient extends Command
         } else {
             $nonce = null;
         }
-        if (!$this->option('no-req-validation')) {
+        if (!$this->option('no-req-validation') && env('WITH_REQUEST_VALIDATION', '0') == '1') {
             $headers['X-REQUEST-VALIDATION'] = $this->getRequestJWS($jwk, $method, $path, $body, $nonce);
         }
 

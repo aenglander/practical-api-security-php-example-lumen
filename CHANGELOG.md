@@ -1,6 +1,11 @@
 Change Log
 ==========
 
+2.0.0
+-----
+
+Simplified and compartmentalized for training
+
 1.0.0
 -----
 

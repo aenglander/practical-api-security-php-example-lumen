@@ -64,24 +64,25 @@ if (env('WITH_REPLAY_PREVENTION', '1') === '1') {
         App\Http\Middleware\ReplayPreventionMiddleware::class
     ]);
 }
-$app->middleware([
-    App\Http\Middleware\ErrorMiddleware::class
-]);
+
 if (env('WITH_AUTHENTICATION', '1') === '1') {
     $app->middleware([
         App\Http\Middleware\AuthenticationMiddleware::class
     ]);
 }
-if (env('WITH_JWT_VALIDATION', '1') === '1') {
+
+if (env('WITH_REQUEST_VALIDATION', '1') === '1') {
     $app->middleware([
-        App\Http\Middleware\JWTMiddleware::class
+        App\Http\Middleware\RequestValidationMiddleware::class
     ]);
 }
+
 if (env('WITH_RATE_LIMITING', '1') === '1') {
     $app->middleware([
         App\Http\Middleware\RateLimitMiddleware::class
     ]);
 }
+
 if (env('WITH_JWE_ENCRYPTION', '1') === '1') {
     $app->middleware([
         App\Http\Middleware\JWEMiddleware::class
@@ -98,13 +99,6 @@ if (env('WITH_JWE_ENCRYPTION', '1') === '1') {
 |
 */
 
-$app->register(App\Providers\JWSBuilderServiceProvider::class);
-$app->register(App\Providers\JWSVerifierServiceProvider::class);
-$app->register(App\Providers\JWEBuilderServiceProvider::class);
-$app->register(App\Providers\JWEDecrypterServiceProvider::class);
-$app->register(App\Providers\JWKServiceProvider::class);
-$app->register(App\Providers\EncryptionCompactSerializerServiceProvider::class);
-$app->register(App\Providers\SignatureCompactSerializerServiceProvider::class);
 $app->register(App\Providers\UserServiceProvider::class);
 
 /*

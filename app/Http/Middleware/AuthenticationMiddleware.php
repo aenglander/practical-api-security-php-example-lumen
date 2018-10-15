@@ -3,35 +3,29 @@
 namespace App\Http\Middleware;
 
 use App\Exceptions\AuthorizationRequiredException;
-use App\Http\RequestHelper;
 use App\Service\UserService;
 use Closure;
-use Jose\Component\Core\Converter\StandardConverter;
-use Jose\Component\Signature\Serializer\CompactSerializer;
+use Illuminate\Http\Request;
 
 class AuthenticationMiddleware
 {
 
     private $userService;
-    private $compactSerializer;
-    private $jsonConverter;
 
-    public function __construct(UserService $userService, CompactSerializer $compactSerializer)
+    public function __construct(UserService $userService)
     {
         $this->userService = $userService;
-        $this->compactSerializer = $compactSerializer;
-        $this->jsonConverter = new StandardConverter();
     }
 
-    public function handle($request, Closure $next)
+    public function handle(Request $request, Closure $next)
     {
-        list($userId, $keyId) = RequestHelper::getUserAndKeyIdFromRequest($request);
+        $userId = $request->getUser();
+        $password = $request->getPassword();
         $user = $this->userService->getUserById($userId);
-        if (!$user || !array_key_exists($keyId, $user->keys)) {
+        if (!$user || !$this->userService->validatePassword($user, $password)) {
             throw new AuthorizationRequiredException();
         }
         $this->userService->setCurrentUser($user);
-        $this->userService->setCurrentKeyId($keyId);
 
         return $next($request);
     }

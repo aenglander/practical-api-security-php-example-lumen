@@ -3,11 +3,8 @@
 namespace App\Http\Middleware;
 
 
-use App\Exceptions\AuthorizationRequiredException;
 use App\Exceptions\InvalidRequestException;
-use App\Http\RequestHelper;
 use Closure;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Http\Request;
 use Psr\Log\LoggerInterface;
@@ -37,13 +34,15 @@ class ReplayPreventionMiddleware
 
     public function handle(Request $request, Closure $next)
     {
-        $token = RequestHelper::getJwtStringFromServerRequest($request);
-        if ($token === null) {
-            $this->logger->info("No JWT found in request");
-            throw new AuthorizationRequiredException();
-        } elseif (!$this->cache->add(hash('sha512', $token), 1, 10)) {
-            throw new InvalidRequestException();
+        $nonce = $request->header('X-NONCE');
+        if ($nonce === null) {
+            $this->logger->info("No X-NONCE header found in request");
+            throw new InvalidRequestException("No X-NONCE header");
+        } elseif (!$this->cache->add(hash('sha512', $nonce), 1, 10)) {
+            throw new InvalidRequestException("Duplicate Request");
         }
-        return $next($request);
+        $response = $next($request);
+        $response->headers->set('X-NONCE', $nonce);
+        return $response;
     }
 }

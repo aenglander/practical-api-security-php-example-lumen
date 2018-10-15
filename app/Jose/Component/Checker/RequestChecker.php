@@ -30,8 +30,14 @@ final class RequestChecker extends HttpMessageChecker
     public function checkClaim($value)
     {
         if (!array_key_exists('method', $value)) {
-            throw new \InvalidArgumentException("Sub-claim method not included in request claim");
+            throw new \InvalidArgumentException("method not included in request validation");
         } elseif ($value['method'] !== $this->request->getMethod()) {
+            throw new InvalidClaimException("Invalid request method", "request.method", $value['method']);
+        }
+
+        if (!array_key_exists('nonce', $value)) {
+            throw new \InvalidArgumentException("nonce method not included in request validation");
+        } elseif ($value['nonce'] !== $this->request->headers->get('X-NONCE')) {
             throw new InvalidClaimException("Invalid request method", "request.method", $value['method']);
         }
 

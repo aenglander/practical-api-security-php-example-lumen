@@ -15,6 +15,7 @@ class UserService
             'valid-user' => (object)[
                 'name' => 'Valid User',
                 'id' => 'valid-user',
+                'password' => '$2y$10$UUV78LFFYtVKVuuLPxDjSesEbFHziHH1UBKtMe71oDGqXvqg2gHNu',
                 'keys' => [
                     'key1' => 'bc926745ef6c8dda6ed2689d08d5793d7525cb81',
                     'key2' => 'bc926745ef6c8dda6ed2689d08d5793d7525cb82'
@@ -24,7 +25,7 @@ class UserService
         $this->currentUser = null;
     }
 
-    public function getUserById(string $id)
+    public function getUserById(?string $id)
     {
         return $this->users[$id] ?? null;
     }
@@ -47,5 +48,9 @@ class UserService
     public function getCurrentKeyId()
     {
         return $this->currentKeyId;
+    }
+
+    public function validatePassword($user, $password) {
+        return password_verify($password, $user->password);
     }
 }

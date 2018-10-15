@@ -1,18 +1,12 @@
 <?php
+
 namespace App\Console\Commands;
 
 
-use App\Http\RequestHelper;
-use App\Jose\Component\Checker\ResponseChecker;
-use App\Jose\Component\Checker\StringMatchChecker;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Request;
 use Illuminate\Console\Command;
-use Jose\Component\Checker\ClaimCheckerManager;
-use Jose\Component\Checker\ExpirationTimeChecker;
-use Jose\Component\Checker\IssuedAtChecker;
-use Jose\Component\Checker\NotBeforeChecker;
 use Jose\Component\Core\AlgorithmManager;
 use Jose\Component\Core\Converter\StandardConverter;
 use Jose\Component\Core\JWK;
@@ -29,9 +23,7 @@ use Jose\Component\Signature\Algorithm\HS256;
 use Jose\Component\Signature\Algorithm\HS384;
 use Jose\Component\Signature\Algorithm\HS512;
 use Jose\Component\Signature\JWSBuilder;
-use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer as SignatureCompactSerializer;
-use Jose\Component\Signature\Serializer\CompactSerializer;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -39,9 +31,13 @@ class APIClient extends Command
 {
     protected $signature = 'api:request 
         {name? : If name is provided, call will be a post with a key/value pair of JSON sent as name/provided-value. Otherwise, it will be a GET call.}
-        {--no-jwt : Send no JWT with the request}
-        {--no-encryption : Send the request without encryption.}
-        {--user-name=valid-user : Provide a user name. Defaults to allowed-user} 
+        {--no-nonce : SDo not send X-NONCE header in teh request}
+        {--use-nonce= : Use the provided nonce for the X-NONCE header in the request}
+        {--no-req-validation : Do not send X-REQUEST-VALIDATION header in the request}
+        {--no-auth : SDo not send Authorization header in the request}
+        {--user-name=valid-user : Provide a user name. Defaults to allowed-user}
+        {--password=password}
+        {--no-encryption : Send the request without an encrypted body.}
         {--key-id=key1 : Encryption/Signature Key ID}
         {--key=bc926745ef6c8dda6ed2689d08d5793d7525cb81 : Encryption/Signature Key}
         {--base-url=http://localhost:8080 : Base URL for the request.}
@@ -70,25 +66,25 @@ class APIClient extends Command
     }
 
     /**
-     * @throws \Exception
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function handle()
     {
 
-        list($method, $path, $body, $headers, $nonce) = $this->getRequestData();
+        list($method, $path, $body, $headers) = $this->getRequestData();
         $request = new Request($method, $path, $headers, $body);
         $this->logRequest($request);
 
         try {
             $client = $this->getHttpClient();
             $response = $client->send($request);
-            $this->validateResponse($response, $nonce);
-        } catch (RequestException $e) {
-            $this->error(sprintf("Server error: %s %s", $e->getResponse()->getStatusCode(), $e->getResponse()->getReasonPhrase()));
-            $response = $e->getResponse();
-        }
+            $this->logResponse($response);
 
-        $this->logResponse($response);
+        } catch (RequestException $e) {
+            $this->logResponse($e->getResponse());
+        } catch (\Exception $e) {
+            $this->error(sprintf("Error processing response: %s", $e->getMessage()));
+        }
     }
 
     private function getHttpClient(): Client
@@ -96,27 +92,17 @@ class APIClient extends Command
         return new Client(['base_uri' => $this->option('base-url')]);
     }
 
-    private function getRequestJWT(JWK $jwk, string $request_method, string $path, ?string $request_body, string $user, string $nonce): string
+    private function getRequestJWT(JWK $jwk, string $user): string
     {
         $header = ['cty' => 'JWT', 'alg' => 'HS256'] + $this->getKeyHeaders($jwk);
         $now = time();
         $claims = [
-            'jti' => $nonce,
             'iat' => $now,
             'nbf' => $now,
             'exp' => $now,
             'iss' => $user,
-            'aud' => 'example-api',
-            'request' => [
-                'method' => $request_method,
-                'path' => $path,
-            ]
+            'aud' => 'example-api'
         ];
-
-        if ($request_body !== null) {
-            $claims['request']['body_hash_alg'] = 'sha512';
-            $claims['request']['body_hash'] = hash('sha512', $request_body);
-        }
         $payload = $this->converter->encode($claims);
         $jwsBuilder = new JWSBuilder($this->converter, $this->signatureAlgorithmManager);
         $jws = $jwsBuilder
@@ -126,6 +112,30 @@ class APIClient extends Command
             ->build();
         $jwt = $this->signatureSerializer->serialize($jws);
         return $jwt;
+    }
+
+    private function getRequestJWS(JWK $jwk, string $request_method, string $path, ?string $request_body, $nonce): string
+    {
+        $header = ['cty' => 'application/json', 'alg' => 'HS256'] + $this->getKeyHeaders($jwk);
+        $claims = [
+            'method' => $request_method,
+            'path' => $path,
+            'nonce' => $nonce
+        ];
+
+        if ($request_body !== null) {
+            $claims['body_hash_alg'] = 'sha512';
+            $claims['body_hash'] = hash('sha512', $request_body);
+        }
+        $payload = $this->converter->encode($claims);
+        $jwsBuilder = new JWSBuilder($this->converter, $this->signatureAlgorithmManager);
+        $jws = $jwsBuilder
+            ->create()
+            ->withPayload($payload)
+            ->addSignature($jwk, $header)
+            ->build();
+        $compactSerializedJWS = $this->signatureSerializer->serialize($jws);
+        return $compactSerializedJWS;
     }
 
     private function getJWK(): JWK
@@ -181,6 +191,7 @@ class APIClient extends Command
     {
         $name = $this->argument('name');
         $user = $this->option('user-name');
+        $pass = $this->option('password');
         $path = '/';
         $jwk = $this->getJWK();
         if ($name === null) {
@@ -194,43 +205,30 @@ class APIClient extends Command
             $headers = ['Content-Type' => $contentType];
         }
 
-        if (!$this->option('no-jwt')) {
-            $nonce = base64_encode(random_bytes(32));
-            $jwt = $this->getRequestJWT($jwk, $method, $path, $body, $user, $nonce);
-            $headers['Authentication'] = sprintf("Bearer %s", $jwt);
+        if (!$this->option('no-auth')) {
+            $headers['Authorization'] = sprintf("Basic %s", base64_encode(sprintf("%s:%s", $user, $pass)));
+        }
+
+        if (!$this->option('no-nonce')) {
+            $nonce = $this->option('use-nonce');
+            if ($nonce === null) {
+                $nonce = base64_encode(random_bytes(32));
+            }
+            $headers['X-NONCE'] = $nonce;
         } else {
             $nonce = null;
         }
-
-        return array($method, $path, $body, $headers, $nonce);
-    }
-
-    private function validateResponse(ResponseInterface $response, string $nonce)
-    {
-        if (!$this->option('no-jwt')) {
-            if (!$response->hasHeader('X-JWT')) {
-                throw new \Exception("No JWT in response!");
-            }
-            $token = $response->getHeader('X-JWT')[0];
-            $jws = $this->signatureSerializer->unserialize($token);
-            $jwk = $this->getJWK();
-            (new JWSVerifier($this->signatureAlgorithmManager))->verifyWithKey($jws, $jwk, 0);
-            $claims = $this->converter->decode($jws->getPayload());
-            ClaimCheckerManager::create([
-                new StringMatchChecker('jti', $nonce),
-                new StringMatchChecker('iss', 'example-api'),
-                new StringMatchChecker('sub', $this->option('user-name')),
-                new IssuedAtChecker(5),
-                new NotBeforeChecker(5),
-                new ExpirationTimeChecker(5),
-                new ResponseChecker($response),
-            ])->check($claims);
+        if (!$this->option('no-req-validation')) {
+            $headers['X-REQUEST-VALIDATION'] = $this->getRequestJWS($jwk, $method, $path, $body, $nonce);
         }
+
+        return array($method, $path, $body, $headers);
     }
 
-/***********************************************************************
-* The remaining code is simply for logging information to the console *
-***********************************************************************/
+
+    /***********************************************************************
+     * The remaining code is simply for logging information to the console *
+     ***********************************************************************/
 
     protected function logResponse(ResponseInterface $response)
     {
@@ -246,10 +244,6 @@ class APIClient extends Command
         $content = $response->getBody()->getContents();
         $response->getBody()->rewind();
         $this->info(sprintf("\n%s", $content), $response_is_encrypted ? 'v' : null);
-
-        if ($token = $response->getHeader('X-JWT')) {
-            $this->logTokenClaims($token[0]);
-        }
 
         if ($response_is_encrypted) {
             $this->logEncryptedResponse($response);
@@ -291,12 +285,17 @@ class APIClient extends Command
             $this->info(sprintf("\n%s", $decryptedRequest));
         }
 
-        if ($token = RequestHelper::getJwtStringFromPsrRequest($request)) {
-            $this->logTokenClaims($token);
+        if ($request->hasHeader('X-REQUEST-VALIDATION')) {
+            $validation = $request->getHeader('X-REQUEST-VALIDATION')[0];
+            $this->logTokenClaims($validation, "Validation Claims");
+        }
+
+        if ($token = self::getJwtStringFromPsrRequest($request)) {
+            $this->logTokenClaims($token, "Auth JWT");
         }
     }
 
-    private function requestShouldBeEncrypted() : bool
+    private function requestShouldBeEncrypted(): bool
     {
         if ($this->option('no-encryption')) {
             return false;
@@ -305,9 +304,9 @@ class APIClient extends Command
         }
     }
 
-    private function logTokenClaims($token)
+    private function logTokenClaims($token, $title)
     {
-        $this->comment("\nJWT Claims:\n", 'v');
+        $this->comment(sprintf("\n%s:\n", $title), 'v');
         foreach ($this->getClaimsFromToken($token) as $key => $value) {
             if (is_array($value)) {
                 $this->info(sprintf("%s:", $key), 'v');
@@ -327,4 +326,20 @@ class APIClient extends Command
         $claims = $this->converter->decode($payload);
         return $claims;
     }
+
+    private static function getJwtStringFromPsrRequest(RequestInterface $request)
+    {
+        $auths = $request->getHeader('Authentication');
+        $token = $auths[0] ?? null;
+        return self::getTokenFromHeader($token);
+    }
+
+    private static function getTokenFromHeader($auth)
+    {
+        preg_match("/^X-JWT (?P<token>.*)$/", $auth, $matches);
+        $token = $matches['token'] ?? null;
+        return $token;
+    }
+
+
 }

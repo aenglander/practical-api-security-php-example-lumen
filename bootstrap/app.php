@@ -65,12 +65,6 @@ if (env('WITH_REPLAY_PREVENTION', '1') === '1') {
     ]);
 }
 
-if (env('WITH_AUTHENTICATION', '1') === '1') {
-    $app->middleware([
-        App\Http\Middleware\AuthenticationMiddleware::class
-    ]);
-}
-
 /*
 |--------------------------------------------------------------------------
 | Register Service Providers

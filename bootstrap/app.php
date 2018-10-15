@@ -59,11 +59,6 @@ $app->singleton(
 |
 */
 
-if (env('WITH_REPLAY_PREVENTION', '1') === '1') {
-    $app->middleware([
-        App\Http\Middleware\ReplayPreventionMiddleware::class
-    ]);
-}
 
 /*
 |--------------------------------------------------------------------------
